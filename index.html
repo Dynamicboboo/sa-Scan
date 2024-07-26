@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Linea Data</title>
+    <title>Linea Scan</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -17,7 +17,7 @@
         th, td {
             border: 1px solid #ddd;
             padding: 8px;
-            text-align: center; /* 所有文字内容居中 */
+            text-align: center;
         }
 
         th {
@@ -43,7 +43,7 @@
             border: 1px solid #ccc;
             background: #fff;
             z-index: 1000;
-            width: 380px; /* 增大弹出窗口 */
+            width: 380px;
         }
 
         #fingerprintDialog {
@@ -56,22 +56,22 @@
             border: 1px solid #ccc;
             background: #fff;
             z-index: 1000;
-            width: 200px; /* 增大弹出窗口 */
+            width: 200px;
         }
 
         #addressInputDialog textarea {
             width: 100%;
-            height: 200px; /* 增大输入框 */
+            height: 200px;
         }
 
         #fingerprintDialog textarea {
             width: 100%;
-            height: 20px; /* 增大输入框 */
+            height: 20px;
         }
 
         .dialog-buttons {
             margin-top: 10px;
-            text-align: center; /* 按钮居中 */
+            text-align: center;
         }
 
         .dialog-buttons button {
@@ -88,7 +88,7 @@
 
     </style>
     <script type="module">
-        import getLineaData, { loadDataFromCache, saveDataToCache, getETHMainnetTX } from './main.js';
+        import getLineaData, { loadDataFromCache, saveDataToCache, getETHMainnetTX, getTokenUsage } from './main.js';
 
         const displayData = (data) => {
             if (!Array.isArray(data)) {
@@ -108,7 +108,7 @@
                 const lastTxDate = new Date(entry.activity.lastTx);
                 const queryDate = new Date(entry.queryTime);
                 const lastTxClass = (now - lastTxDate) / (1000 * 60 * 60 * 24) >= 7 ? 'red-text' : '';
-                const queryTimeClass = (now - queryDate) / (1000 * 60 * 60 * 24) >= 1 ? 'red-text' : '';
+                const queryTimeClass = (now - queryDate) / (1000 * 60 * 60 * 24) >= 3 ? 'red-text' : '';
 
                 const txClass = entry.activity.tx < 10 ? 'red-text' : '';
                 const ethMainnetTxClass = entry.ethMainnetTX < 5 ? 'red-text' : '';
@@ -119,9 +119,23 @@
                     : (now - lastTxDate) / (1000 * 60 * 60) >= 1
                     ? `${Math.floor((now - lastTxDate) / (1000 * 60 * 60))}小时前`
                     : `${Math.floor((now - lastTxDate) / (1000 * 60))}分钟前`;
+                const lastQuery = (now - queryDate) / (1000 * 60 * 60 * 24) >= 1
+                    ? `${Math.floor((now - queryDate) / (1000 * 60 * 60 * 24))}天前`
+                    : (now - queryDate) / (1000 * 60 * 60) >= 1
+                    ? `${Math.floor((now - queryDate) / (1000 * 60 * 60))}小时前`
+                    : `${Math.floor((now - queryDate) / (1000 * 60))}分钟前`;
 
                 const row = document.createElement('tr');
                 row.setAttribute('data-address', entry.address);
+
+                // Display tokens used
+                let tokensHtml = '';
+                if (entry.tokens) {
+                    for (const token of entry.tokens) {
+                        // tokensHtml += `<img height="20" width="20" src="${token.iconUrl}" alt="${token.symbol}" title="${token.symbol}" /> `;
+                        tokensHtml += `<a>${token.symbol}</a>`;
+                    }
+                }
 
                 row.innerHTML = `
                     <td><button onclick="editFingerprint('${entry.address}')">${entry.fingerprint || '编辑'}</button></td>
@@ -131,7 +145,8 @@
                     <td class="${lastTxClass}">${lastTx}</td>
                     <td class="${contractActivityClass}">${entry.activity.contractActivity}</td>
                     <td>${entry.activity.fee}</td>
-                    <td class="${queryTimeClass}">${entry.queryTime}</td>
+                    <td class="${queryTimeClass}">${lastQuery}</td>
+                    <td>${tokensHtml}</td>
                     <td><button onclick="reQuery('${entry.address}')">重新查询</button></td>
                     <td><button onclick="deleteEntry('${entry.address}')">删除</button></td>
                 `;
@@ -151,8 +166,10 @@
                     const result = await getLineaData(address);
                     if (result.result === "success") {
                         const ethMainnetTX = await getETHMainnetTX(address);
+                        const tokens = await getTokenUsage(address); // 获取代币使用情况
                         result.ethMainnetTX = ethMainnetTX;
                         result.queryTime = new Date().toLocaleString();
+                        result.tokens = tokens; // 保存代币使用情况
                         data.push(result);
                     } else {
                         alert("Error: " + result.reason);
@@ -217,9 +234,11 @@
                 const result = await getLineaData(address);
                 if (result.result === "success") {
                     const ethMainnetTX = await getETHMainnetTX(address);
+                    const tokens = await getTokenUsage(address); // 获取代币使用情况
                     result.ethMainnetTX = ethMainnetTX;
                     result.queryTime = new Date().toLocaleString();
                     result.fingerprint = data[index].fingerprint; // preserve fingerprint
+                    result.tokens = tokens; // 保存代币使用情况
                     data[index] = result;
                     displayData(data);
                 } else {
@@ -234,15 +253,14 @@
             displayData(data);
         };
 
-        window.editFingerprint = editFingerprint; // 确保函数在全局范围内可用
-        window.saveFingerprint = saveFingerprint; // 确保函数在全局范围内可用
+        window.editFingerprint = editFingerprint;
+        window.saveFingerprint = saveFingerprint;
 
         document.addEventListener('DOMContentLoaded', () => {
-            const cachedData = loadDataFromCache();
-            if (cachedData) {
-                displayData(cachedData);
+            const data = loadDataFromCache();
+            if (data) {
+                displayData(data);
             }
-
             document.getElementById('addAddressButton').addEventListener('click', showAddressInputDialog);
             document.getElementById('saveAddressButton').addEventListener('click', addAddresses);
             document.getElementById('cancelAddressButton').addEventListener('click', hideAddressInputDialog);
@@ -255,39 +273,38 @@
 </head>
 <body>
     <button id="addAddressButton">添加地址</button>
-
     <div id="addressInputDialog">
-        <textarea id="addressTextarea" placeholder="请输入地址，每行一个"></textarea>
+        <textarea id="addressTextarea" placeholder="在此处输入地址，每行一个"></textarea>
         <div class="dialog-buttons">
-            <button id="saveAddressButton">确定</button>
+            <button id="saveAddressButton">保存</button>
             <button id="cancelAddressButton">取消</button>
         </div>
     </div>
-
     <div id="fingerprintDialog">
-        <textarea id="fingerprintTextarea" placeholder="请输入指纹序号"></textarea>
+        <textarea id="fingerprintTextarea" placeholder="输入指纹"></textarea>
         <div class="dialog-buttons">
             <button id="saveFingerprintButton">保存</button>
             <button id="cancelFingerprintButton">取消</button>
         </div>
     </div>
-
     <table id="dataTable">
         <thead>
             <tr>
-                <th>指纹序号</th>
+                <th>指纹</th>
                 <th>地址</th>
-                <th>TX数</th>
+                <th>TX</th>
                 <th>主网TX</th>
-                <th>上次交易时间</th>
+                <th>上次交易</th>
                 <th>合约数</th>
-                <th>Gas费</th>
+                <th>费用</th>
                 <th>查询时间</th>
-                <th>重新查询</th>
+                <th>币种统计</th>
+                <th>操作</th>
                 <th>删除</th>
             </tr>
         </thead>
-        <tbody id="dataBody"></tbody>
+        <tbody id="dataBody">
+        </tbody>
     </table>
 </body>
 </html>
