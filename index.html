@@ -107,7 +107,7 @@
             data.forEach((entry) => {
                 const lastTxDate = new Date(entry.activity.lastTx);
                 const queryDate = new Date(entry.queryTime);
-                const lastTxClass = (now - lastTxDate) / (1000 * 60 * 60 * 24) >= 10 ? 'red-text' : '';
+                const lastTxClass = (now - lastTxDate) / (1000 * 60 * 60 * 24) >= 15 ? 'red-text' : '';
                 const queryTimeClass = (now - queryDate) / (1000 * 60 * 60 * 24) >= 3 ? 'red-text' : '';
 
                 const txClass = entry.activity.tx < 10 ? 'red-text' : '';
